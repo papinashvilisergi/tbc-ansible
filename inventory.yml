@@ -1,0 +1,17 @@
+all:
+  hosts:
+    localhost:
+      ansible_connection: local
+      ansible_user: sergipapinashvili
+      hostname: "tbc-server"
+      timezone: "Asia/Tbilisi"
+      sshd_config:
+        port: 22
+        LoginGraceTime: "1m"
+        PermitRootLogin: "yes"
+        MaxAuthTries: 3
+        PasswordAuthentication: "no"
+      superuser:
+        name: "superadmin"
+        ssh_public_key: "/home/sergipapinashvili/.ssh/id_rsa.pub"
+      root_password: "root"
