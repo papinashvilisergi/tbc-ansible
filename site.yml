@@ -1,5 +1,89 @@
-- name: Test Ansible Connectivity
+- name: Configure Ubuntu Server
   hosts: all
+  become: true
+
+  vars:
+    package_list:
+      - nano
+      - vim
+      - mc
+      - wget
+      - tree
+      - bash-completion
+      - ca-certificates
+      - unzip
+      - figlet
+      - traceroute
+      - tcpdump
+      - nfs-common
+
   tasks:
-    - name: Ping the target server
-      ansible.builtin.ping:
+    - name: Set the timezone
+      ansible.builtin.command:
+        cmd: timedatectl set-timezone "{{ timezone }}"
+
+    - name: Set hostname
+      ansible.builtin.hostname:
+        name: "{{ hostname }}"
+
+    - name: Disable firewall
+      ansible.builtin.service:
+        name: ufw
+        state: stopped
+        enabled: no
+
+    - name: Configure SSHD
+      ansible.builtin.lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: "^{{ item.key }} "
+        line: "{{ item.key }} {{ item.value }}"
+        state: present
+      loop: "{{ sshd_config | dict2items }}"
+      notify: Restart SSHD
+
+    - name: Install required packages
+      ansible.builtin.apt:
+        name: "{{ package_list }}"
+        state: present
+        update_cache: yes
+
+    - name: Set root user password
+      ansible.builtin.shell: echo "root:{{ root_password }}" | chpasswd
+
+    - name: Create SSH banner
+      ansible.builtin.template:
+        src: templates/ssh_banner.j2
+        dest: /etc/issue.net
+      notify: Restart SSHD
+
+    - name: Create superuser
+      ansible.builtin.user:
+        name: "{{ superuser.name }}"
+        state: present
+        groups: sudo
+        append: true
+
+    - name: Create .ssh directory for superuser
+      ansible.builtin.file:
+        path: "/home/{{ superuser.name }}/.ssh"
+        state: directory
+        owner: "{{ superuser.name }}"
+        group: "{{ superuser.name }}"
+        mode: 0700
+
+    - name: Add public key to superuser
+      ansible.builtin.copy:
+        src: "{{ superuser.ssh_public_key }}"
+        dest: "/home/{{ superuser.name }}/.ssh/authorized_keys"
+        owner: "{{ superuser.name }}"
+        group: "{{ superuser.name }}"
+        mode: 0600
+
+    - name: Include additional tasks for Node Exporter and Fluent Bit
+      ansible.builtin.include_tasks: tasks/node_fluent.yml
+
+  handlers:
+    - name: Restart SSHD
+      ansible.builtin.service:
+        name: sshd
+        state: restarted
